@@ -1,26 +1,53 @@
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
-import requests
+import time
+from urllib.parse import quote
 
-page_to_scrape = "https://www.finn.no/job/sea"
-response = requests.get(page_to_scrape)
-soup = BeautifulSoup(response.text, "html.parser")
+class FinnJobbScraper:
+    def __init__(self, url):
+        self.url = url
+        self.driver = self._start_browser()
 
-# Debug: Skriv ut hele siden for å se strukturen
-print("=== HELE HTML ===")
-print(soup.prettify()[:2000])  # Første 2000 tegn
+    def _start_browser(self):
+        options = webdriver.ChromeOptions()
+        options.add_argument("--headless")
+        options.add_argument("--no-sandbox")
+        return webdriver.Chrome(
+            service=Service(ChromeDriverManager().install()),
+            options=options
+        )
 
-print("\n=== SØKER ETTER TITLER ===")
-title = soup.find_all("h2", attrs={"class": "t2 md:t1 mb-6"})
-print(f"Fant {len(title)} titler")
+    def hent_annonser(self):
+        self.driver.get(self.url)
+        WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "article"))
+        )
+        time.sleep(2)
 
-print("\n=== SØKER ETTER DEADLINES ===")
-deadline = soup.find_all("span", attrs={"class": "mt-2 font-bold"})
-print(f"Fant {len(deadline)} deadlines")
+        soup = BeautifulSoup(self.driver.page_source, "html.parser")
+        self.driver.quit()
 
-print("\n=== SØKER ETTER SELSKAPER ===")
-company = soup.find_all("p", attrs={"class": "mb-24"})
-print(f"Fant {len(company)} selskaper")
-headers = {"User-Agent": "Mozilla/5.0"}
-response = requests.get(page_to_scrape, headers=headers)
 
-print = ("text")
+#Noe galt med attribute på H2, skal undersøke nærmere
+        jobber = []
+        for annonse in soup.find_all("article"):
+            jobber.append({
+                "tittel": annonse.find("h2", class_="t2 md:t1 mb-6").text.strip() if annonse.find("h2") else "Ukjent",
+                "url": annonse.find("a")["href"] if annonse.find("a") else ""
+            })
+        return jobber
+
+
+søkeord = quote("Lærling IT")
+scraper = FinnJobbScraper(f"https://www.finn.no/job/fulltime/search.html?q={søkeord}")
+resultater = scraper.hent_annonser()
+
+for jobb in resultater:
+    print(jobb["tittel"])
+    print(jobb["url"])
+    print("---")
